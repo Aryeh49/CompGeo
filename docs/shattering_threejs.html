@@ -1,0 +1,231 @@
+<!DOCTYPE HTML>
+<html lang="en">
+	<head>
+		<title>Shattering</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;"/>
+		<link href="css/style.css" rel="stylesheet" type="text/css">
+		<style type="text/css">
+			body {
+				background-color: #000000;
+				margin: 0px;
+				padding: 0;
+				overflow: hidden;
+			}
+
+			a {
+				color:#0078ff;
+			}
+			#guiAbout {
+				background-color: black;
+				padding: 10px;
+				font-size: 12px;
+			}
+			#about {
+				display: none;
+			}
+		</style>
+	</head>
+	<body>
+			<div id="example-container"></div>
+			<div id="m"></div>
+			</div>
+		<script type="text/javascript" src="js/jquery-1.4.4.min.js"></script>
+		<script type="text/javascript" src="build/toxiclibs.js"></script>
+		<script type="text/javascript" src="js/three.js"></script> 
+		<script src="js/DAT.GUI.min.js"></script>
+		<script type="text/javascript">
+			
+		var container = document.getElementById('example-container'),
+			$m = $("<div>"),
+			stage = new toxi.geom.Vec2D(window.innerWidth,window.innerHeight),
+			camera = new THREE.PerspectiveCamera( 45, stage.x / stage.y, 1, 2000),
+			scene = new THREE.Scene(),
+			renderer = new THREE.WebGLRenderer({ antialias: true }),
+			options,
+			material,
+			triangleMesh,
+			threeMesh; //<--we'll put the converted mesh here
+
+		//set the scene
+		container.style.backgroundColor = "black";
+		camera.position.z = 800;
+		scene.add( camera );
+		renderer.setSize(stage.x,stage.y);
+		container.appendChild(renderer.domElement);
+		//add the rotation controls
+		var controls = new THREE.TrackballControls( camera, renderer.domElement );
+		controls.rotateSpeed = 1.0;
+		controls.zoomSpeed = 1.2;
+		controls.panSpeed = 0.2;
+		controls.noZoom = false;
+		controls.noPan = false;
+		controls.staticMoving = false;
+		controls.dynamicDampingFactor = 0.1;
+
+		material = new THREE.MeshNormalMaterial({color: 0xBAE8E6, opacity: 1.0});
+		material.side = THREE.DoubleSide;
+		
+
+		options = {
+			objectRadius: 6,
+			meshResolution: 100,
+			initDisk: function(res){
+				if(res === undefined){
+					res = options.meshResolution;
+				}
+				if(threeMesh !== undefined) {
+					scene.remove(threeMesh);
+				}
+				triangleMesh = new toxi.geom.mesh.WETriangleMesh();
+				let step = 0.5;
+				for (var x=-30; x <= 30; x += step){
+					for (var y=-30; y <= 30; y += step){
+						let a = new toxi.geom.Vec3D(x,y,0);
+						let b = new toxi.geom.Vec3D(x+step,y,0);
+						let c = new toxi.geom.Vec3D(x,y+step,0);
+						let d = new toxi.geom.Vec3D(x+step,y+step,0);
+						if (x**2 + y**2 < 30**2){
+							triangleMesh.addFace(a,b,c);
+							triangleMesh.addFace(b,d,c);
+						}
+					}
+				}
+				//turn the mesh into THREE.Geometry
+				let threeGeometry = toxi.THREE.ToxiclibsSupport.createMeshGeometry( triangleMesh );
+				threeMesh = new THREE.Mesh( threeGeometry, material );
+				threeMesh.scale.set(options.objectRadius,options.objectRadius,options.objectRadius);
+				scene.add(threeMesh);
+			},
+
+			breakFromEdge: function(res){
+				if(threeMesh !== undefined) {
+					scene.remove(threeMesh);
+				}
+				if (triangleMesh == undefined) {
+					options.initDisk();
+				}
+				let startAngle = Math.random()*2*Math.PI;
+				let start = new toxi.geom.Vec3D(Math.cos(startAngle)*30,Math.sin(startAngle)*30,0);
+				for (var i=0; i < Math.random()*10; i++){
+					let breaks = advanceShatter(start, startAngle + Math.PI, 150);
+					breaks.forEach(vec => {
+						let vertex = triangleMesh.getClosestVertexToPoint(vec);
+						if (vertex != undefined){
+							vertex.edges.forEach(edge => {
+								edge.faces.forEach( face => {
+
+									triangleMesh.removeFace(face);
+								});});
+						}
+
+					});
+				}
+				//turn the mesh into THREE.Geometry
+				threeGeometry = toxi.THREE.ToxiclibsSupport.createMeshGeometry( triangleMesh );
+				threeMesh = new THREE.Mesh( threeGeometry, material );
+				threeMesh.scale.set(options.objectRadius,options.objectRadius,options.objectRadius);
+				scene.add(threeMesh);
+			},
+			breakFromCenter: function(res){
+				if(threeMesh !== undefined) {
+					scene.remove(threeMesh);
+				}
+				if (triangleMesh == undefined) {
+					options.initDisk();
+				}
+				for (var i=0; i < Math.random()*10; i++){
+					let start = new toxi.geom.Vec3D(0,0,0);
+					let breaks = advanceShatter(start, Math.random()*2*Math.PI, 80);
+					breaks.forEach(vec => {
+						let vertex = triangleMesh.getClosestVertexToPoint(vec);
+						if (vertex != undefined){
+							vertex.edges.forEach(edge => {
+								edge.faces.forEach( face => {
+
+									triangleMesh.removeFace(face);
+								});});
+						}
+
+					});
+				}
+				//turn the mesh into THREE.Geometry
+				threeGeometry = toxi.THREE.ToxiclibsSupport.createMeshGeometry( triangleMesh );
+				threeMesh = new THREE.Mesh( threeGeometry, material );
+				threeMesh.scale.set(options.objectRadius,options.objectRadius,options.objectRadius);
+				scene.add(threeMesh);
+			}
+		};
+
+
+		//GUI
+		var gui = new DAT.GUI();
+		$("#guidat")
+			.find(".guidat")
+
+		gui.add(options,"objectRadius")
+			.name("Mesh Scale").min(1).max(30)
+			.onChange(function(){
+				threeMesh.scale.set(options.objectRadius,options.objectRadius,options.objectRadius);
+			});
+		gui.add(material,"wireframe");
+		gui.add(options,"initDisk")
+			.name("Generate New Disk!");
+		gui.add(options,"breakFromCenter")
+			.name("Break from the center !");
+		gui.add(options,"breakFromEdge")
+				.name("Break from the edge !");
+
+
+		function advanceShatter(vector, angle, iterations) {
+			let frontier = [{v: vector, depth: 0, direction: angle}];
+			let breaks = [];
+			var depth = 0;
+			while (depth < iterations && frontier.length > 0) {
+				let current = frontier.pop();
+				let vec = current.v;
+				breaks.push(vec);
+				depth = current.depth;
+				let direction = current.direction;
+				let breakStep = 1.0;
+				let nextVector = new toxi.geom.Vec3D(vec.x + Math.cos(direction) * breakStep, vec.y + Math.sin(direction) * breakStep, 0);
+				let next = {v: nextVector , depth: (depth + 1), direction: direction};
+				if (nextVector.x**2 + nextVector.y**2 < 30**2){
+					frontier.push(next);
+				}
+				if (Math.random() < 0.4){
+					let randAngle =  (((Math.random()*2)-1) * Math.PI * (1-depth/iterations)) + direction;
+					nextVector = new toxi.geom.Vec3D((vec.x + Math.cos(randAngle)*breakStep), (vec.y + Math.sin(randAngle)*breakStep), 0);
+					let next = {v: nextVector, depth: (depth + 1), direction: randAngle};
+					if (nextVector.x**2 + nextVector.y**2 > 30**2){
+						break;
+					}
+					frontier.push(next);
+					randAngle =  (((Math.random()*2)-1) * Math.PI * 0.1) + direction;
+					nextVector = new toxi.geom.Vec3D((vec.x + Math.cos(randAngle)*breakStep), (vec.y + Math.sin(randAngle)*breakStep), 0);
+					next =  {v: nextVector, depth: (depth + 1), direction: randAngle};
+					if (nextVector.x**2 + nextVector.y**2 > 30**2){
+						break;
+					}
+					frontier.push(next);
+				}
+			}
+			return breaks;
+
+		}
+		//create first mesh
+		options.initDisk();
+		//start the animation loop
+		animate();
+		function animate() {
+			requestAnimationFrame( animate );
+			render();
+		}
+
+		function render() {
+			controls.update();
+			renderer.render( scene, camera );
+		}
+		</script>
+	</body>
+</html>
